@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual env
+.venv/
+venv/
+ENV/
+env/
+
+# Editors/IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs & caches
+*.log
+.cache/
+.dist-info/
+__pypackages__/
+pip-wheel-metadata/
+
+# Build / Packaging
+build/
+dist/
+*.spec
+*.egg-info/
+*.egg
+wheels/
+
+# PyInstaller artifacts
+*.manifest
+*.bak
+
+# Qt / PySide runtime artifacts
+qt.conf
+PySide6/Qt/plugins/
+PySide6/Qt/translations/
+
+# Local data
+*.sqlite
+*.sqlite3
+/data/
+downloads/
+thumbnails/
+
+# Environment & secrets
+.env
+.env.*
+*.key
+*.pem
+*.crt
+
+# Tests / coverage
+.pytest_cache/
+.coverage
+htmlcov/
