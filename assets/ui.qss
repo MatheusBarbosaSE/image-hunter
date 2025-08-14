@@ -1,0 +1,23 @@
+* { font-family: Inter, Segoe UI, Roboto, -apple-system, "Noto Sans", sans-serif; }
+QWidget { background-color: #111315; color: #D7DBDF; }
+QGroupBox { border: 1px solid #22262B; border-radius: 8px; margin-top: 12px; padding: 8px; }
+QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 4px; color: #A9B0B6; }
+QLineEdit {
+  background: #1A1F24; border: 1px solid #22262B; border-radius: 8px; padding: 6px 8px;
+  selection-color: #0E1414; selection-background-color: #2FB5B5;
+}
+QLineEdit:focus { border-color: #2FB5B5; }
+QPushButton {
+  background: #1A1F24; border: 1px solid #2FB5B5; color: #D7DBDF; border-radius: 10px; padding: 6px 12px;
+}
+QPushButton:hover { background: #173D3D; }
+QPushButton:pressed { background: #0F2C2C; }
+QRadioButton { padding: 6px 10px; }
+QRadioButton::indicator { width: 0px; height: 0px; }
+QRadioButton { border-radius: 12px; border: 1px solid #22262B; background: #1A1F24; }
+QRadioButton:hover { background: #172024; }
+QRadioButton:checked { background: #2FB5B5; color: #0E1414; border: 1px solid #2FB5B5; }
+QListWidget { background: #161A1E; border: 1px solid #22262B; border-radius: 8px; }
+QListWidget::item { padding: 10px; }
+QListWidget::item:selected { background: #173D3D; color: #D7DBDF; }
+QStatusBar { background: #1A1F24; border-top: 1px solid #22262B; }
