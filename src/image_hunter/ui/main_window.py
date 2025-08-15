@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QSettings
-from PySide6.QtGui import QAction, QActionGroup
+from PySide6.QtCore import Qt, QSettings, QUrl
+from PySide6.QtGui import QAction, QActionGroup, QDesktopServices
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton,
     QRadioButton, QButtonGroup, QListWidget, QListWidgetItem, QLabel,
@@ -9,6 +9,9 @@ from PySide6.QtWidgets import (
 )
 
 from image_hunter.i18n.i18n import load, t, SUPPORTED
+from image_hunter.core.gallery import clear_gallery, render_items, bind_selection_changed
+from image_hunter.core.models import ImageItem
+from image_hunter.core.mock_data import make_mock_items
 
 
 class MainWindow(QMainWindow):
@@ -20,11 +23,15 @@ class MainWindow(QMainWindow):
         lang = self.settings.value("lang", "en")
         load(lang)
 
-        self._is_placeholder_gallery = True  # Marks the initial mock items
+        self._is_placeholder_gallery = False
+        self._current_item: ImageItem | None = None
 
         self._build_ui()
         self._apply_texts()
         self._build_language_menu(lang)
+
+        # Bind selection for details updates
+        bind_selection_changed(self.gallery, self._on_item_selected)
 
         self.statusBar().showMessage(
             t("status.results").format(n=0, scope=t("scope.pd"), ms=0)
@@ -92,10 +99,6 @@ class MainWindow(QMainWindow):
         self.gallery.setSpacing(10)
         self.gallery.setUniformItemSizes(True)
 
-        # Placeholder items (will be translated in _apply_texts)
-        for i in range(9):
-            self.gallery.addItem(QListWidgetItem(f"Item {i+1}"))
-
         lay_gallery.addWidget(self.gallery)
 
         # Right: Details
@@ -104,7 +107,6 @@ class MainWindow(QMainWindow):
         lay_details.setContentsMargins(12, 12, 12, 12)
         lay_details.setSpacing(8)
 
-        # Keep label *widgets* as attributes so they can be retranslated
         self.lbl_details_title = QLabel()
         self.lbl_details_source = QLabel()
         self.lbl_details_license = QLabel()
@@ -120,6 +122,12 @@ class MainWindow(QMainWindow):
         self.btn_open_license = QPushButton()
         self.btn_download = QPushButton()
         self.btn_copy_credit = QPushButton()
+
+        self.btn_open_source.clicked.connect(self._action_open_source)
+        self.btn_open_license.clicked.connect(self._action_open_license)
+        self.btn_copy_credit.clicked.connect(self._action_copy_credit)
+        # Download will be implemented later (thumbnail/full image pipeline)
+        self.btn_download.setEnabled(False)
 
         for b in (self.btn_open_source, self.btn_open_license, self.btn_download, self.btn_copy_credit):
             b.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
@@ -187,7 +195,6 @@ class MainWindow(QMainWindow):
         load(code)
         self.settings.setValue("lang", code)
         self._apply_texts()
-        # retranslate the menu title itself
         self.lang_menu.setTitle(t("menu.language"))
 
     # i18n application
@@ -199,7 +206,7 @@ class MainWindow(QMainWindow):
         self.search_edit.setPlaceholderText(t("search.placeholder"))
         self.btn_search.setText(t("btn.search"))
 
-        # left
+        # Left
         self.grp_filters.setTitle(t("panel.filters"))
         self.lbl_quality.setText(t("filters.quality"))
         self.min_width.setPlaceholderText(t("filters.min_width"))
@@ -208,9 +215,6 @@ class MainWindow(QMainWindow):
 
         # Center
         self.grp_gallery.setTitle(t("panel.gallery"))
-        if self._is_placeholder_gallery:
-            for i in range(self.gallery.count()):
-                self.gallery.item(i).setText(t("gallery.item").format(n=i+1))
 
         # Right
         self.grp_details.setTitle(t("panel.details"))
@@ -225,7 +229,49 @@ class MainWindow(QMainWindow):
         self.btn_download.setText(t("btn.download"))
         self.btn_copy_credit.setText(t("btn.copy_credit"))
 
-    # Search action (no network yet)
+    # Search + selection
     def _on_search_clicked(self) -> None:
+        query = self.search_edit.text().strip()
+        clear_gallery(self.gallery)
+        items = make_mock_items(query, n=18)
+        render_items(self.gallery, items)
         scope = t("scope.pd") if self.scope_pd.isChecked() else t("scope.free")
-        self.statusBar().showMessage(t("status.results").format(n=0, scope=scope, ms=0))
+        self.statusBar().showMessage(t("status.results").format(n=len(items), scope=scope, ms=3))
+        if self.gallery.count() > 0:
+            self.gallery.setCurrentRow(0)
+
+    def _on_item_selected(self, item: ImageItem | None) -> None:
+        self._current_item = item
+        if not item:
+            self.val_title.setText("—")
+            self.val_source.setText("—")
+            self.val_license.setText("—")
+            self.val_dims.setText("—")
+            for b in (self.btn_open_source, self.btn_open_license, self.btn_copy_credit):
+                b.setEnabled(False)
+            return
+
+        self.val_title.setText(item.title or "—")
+        self.val_source.setText(f"{item.author} — {item.source.name.title()}")
+        self.val_license.setText(item.license_badge())
+        wh = f"{item.width}×{item.height}px" if (item.width and item.height) else "—"
+        self.val_dims.setText(wh)
+
+        for b in (self.btn_open_source, self.btn_open_license, self.btn_copy_credit):
+            b.setEnabled(True)
+
+    # Actions (open/copy)
+    def _action_open_source(self) -> None:
+        if self._current_item:
+            QDesktopServices.openUrl(QUrl(self._current_item.source_url))
+
+    def _action_open_license(self) -> None:
+        if self._current_item:
+            QDesktopServices.openUrl(QUrl(self._current_item.license_url))
+
+    def _action_copy_credit(self) -> None:
+        if self._current_item:
+            cb = self.clipboard() if hasattr(self, "clipboard") else None
+            # Use QApplication clipboard
+            from PySide6.QtWidgets import QApplication
+            QApplication.clipboard().setText(self._current_item.credit_text or "")
