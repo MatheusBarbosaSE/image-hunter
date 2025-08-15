@@ -34,7 +34,7 @@ def render_items(widget: QListWidget, items: Iterable[ImageItem]) -> None:
     widget.setIconSize(QSize(128, 128))
     for it in items:
         li = QListWidgetItem()
-        li.setText(it.title or "—")
+        li.setText("")
         li.setToolTip(it.tooltip_text())
         li.setIcon(_placeholder_icon(it.license_badge()))
         li.setData(Qt.UserRole, it)

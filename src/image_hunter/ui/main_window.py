@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QSettings, QUrl
+from PySide6.QtCore import Qt, QSettings, QUrl, QSize
 from PySide6.QtGui import QAction, QActionGroup, QDesktopServices, QPixmap
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton,
@@ -13,6 +13,8 @@ from image_hunter.core.gallery import clear_gallery, render_items, bind_selectio
 from image_hunter.core.models import ImageItem
 from image_hunter.core.mock_data import make_mock_items
 from image_hunter.core.thumbs import ThumbLoader
+from image_hunter.ui.gallery_delegate import GalleryDelegate
+from image_hunter.ui.preview_dialog import PreviewDialog
 
 class MainWindow(QMainWindow):
     """Main application window (i18n-aware)."""
@@ -29,8 +31,9 @@ class MainWindow(QMainWindow):
         self._build_ui()
         self._apply_texts()
         self._build_language_menu(lang)
-        
+
         # thumbnails: background loader + signals
+        self._thumb_paths: dict[int, str] = {}
         self.thumbs = ThumbLoader(self)
         self.thumbs.signals.loaded.connect(self._on_thumb_loaded)
         self.thumbs.signals.failed.connect(self._on_thumb_failed)
@@ -103,6 +106,11 @@ class MainWindow(QMainWindow):
         self.gallery.setMovement(QListWidget.Static)
         self.gallery.setSpacing(10)
         self.gallery.setUniformItemSizes(True)
+
+        # Set tile size, custom delegate and double-click action
+        self.gallery.setGridSize(QSize(170, 190))
+        self.gallery.setItemDelegate(GalleryDelegate(self.gallery))
+        self.gallery.itemDoubleClicked.connect(self._on_item_double_clicked)
 
         lay_gallery.addWidget(self.gallery)
 
@@ -238,6 +246,7 @@ class MainWindow(QMainWindow):
     def _on_search_clicked(self) -> None:
         query = self.search_edit.text().strip()
         clear_gallery(self.gallery)
+        self._thumb_paths.clear()
         items = make_mock_items(query, n=18)
         render_items(self.gallery, items)
         # schedule thumbnails for all items currently in the list
@@ -295,3 +304,26 @@ class MainWindow(QMainWindow):
             # Use QApplication clipboard
             from PySide6.QtWidgets import QApplication
             QApplication.clipboard().setText(self._current_item.credit_text or "")
+    def _on_thumb_loaded(self, index: int, path: str) -> None:
+        # Set the loaded image as the icon for the given item index
+        item = self.gallery.item(index)
+        if not item:
+            return
+        px = QPixmap(path)
+        if not px.isNull():
+            # Using QIcon is more robust across bindings
+            from PySide6.QtGui import QIcon
+            item.setIcon(QIcon(px))
+            self._thumb_paths[index] = path  # keep for preview
+
+    def _on_thumb_failed(self, index: int, reason: str) -> None:
+        # Keep the placeholder; could log 'reason' if needed
+        pass
+
+    def _on_item_double_clicked(self, list_item):
+        # Open preview dialog using the cached thumbnail if present
+        row = self.gallery.row(list_item)
+        model = list_item.data(Qt.UserRole)
+        path = self._thumb_paths.get(row)  # May be None (dialog shows "No preview available")
+        dlg = PreviewDialog(self, model, path)
+        dlg.exec()
