@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, QSettings, QUrl
-from PySide6.QtGui import QAction, QActionGroup, QDesktopServices
+from PySide6.QtGui import QAction, QActionGroup, QDesktopServices, QPixmap
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton,
     QRadioButton, QButtonGroup, QListWidget, QListWidgetItem, QLabel,
@@ -12,7 +12,7 @@ from image_hunter.i18n.i18n import load, t, SUPPORTED
 from image_hunter.core.gallery import clear_gallery, render_items, bind_selection_changed
 from image_hunter.core.models import ImageItem
 from image_hunter.core.mock_data import make_mock_items
-
+from image_hunter.core.thumbs import ThumbLoader
 
 class MainWindow(QMainWindow):
     """Main application window (i18n-aware)."""
@@ -29,6 +29,11 @@ class MainWindow(QMainWindow):
         self._build_ui()
         self._apply_texts()
         self._build_language_menu(lang)
+        
+        # thumbnails: background loader + signals
+        self.thumbs = ThumbLoader(self)
+        self.thumbs.signals.loaded.connect(self._on_thumb_loaded)
+        self.thumbs.signals.failed.connect(self._on_thumb_failed)
 
         # Bind selection for details updates
         bind_selection_changed(self.gallery, self._on_item_selected)
@@ -235,6 +240,8 @@ class MainWindow(QMainWindow):
         clear_gallery(self.gallery)
         items = make_mock_items(query, n=18)
         render_items(self.gallery, items)
+        # schedule thumbnails for all items currently in the list
+        self.thumbs.load_for_list(self.gallery)
         scope = t("scope.pd") if self.scope_pd.isChecked() else t("scope.free")
         self.statusBar().showMessage(t("status.results").format(n=len(items), scope=scope, ms=3))
         if self.gallery.count() > 0:
@@ -259,6 +266,19 @@ class MainWindow(QMainWindow):
 
         for b in (self.btn_open_source, self.btn_open_license, self.btn_copy_credit):
             b.setEnabled(True)
+
+    def _on_thumb_loaded(self, index: int, path: str) -> None:
+        # Set the loaded image as the icon for the given item index
+        item = self.gallery.item(index)
+        if not item:
+            return
+        px = QPixmap(path)
+        if not px.isNull():
+            item.setIcon(px)  # QListWidgetItem accepts QPixmap directly
+
+    def _on_thumb_failed(self, index: int, reason: str) -> None:
+        # Keep the placeholder
+        pass
 
     # Actions (open/copy)
     def _action_open_source(self) -> None:
